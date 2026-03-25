@@ -1143,6 +1143,10 @@ async def api_update_activity(act_id, req, env):
 
     if "tags" in body:
         tags = body.get("tags")
+        if tags is None:
+            tags = []
+        if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+            return err("tags must be an array of strings", 400)
         try:
             await env.DB.prepare("DELETE FROM activity_tags WHERE activity_id=?").bind(act_id).run()
         except Exception as e:
