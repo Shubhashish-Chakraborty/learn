@@ -1087,6 +1087,8 @@ async def api_update_activity(act_id, req, env):
     params = []
 
     if title is not None:
+        if not isinstance(title, str):
+            return err("title must be a string", 400)
         title = title.strip()
         if not title:
             return err("title cannot be empty")
@@ -1094,12 +1096,16 @@ async def api_update_activity(act_id, req, env):
         params.append(title)
 
     if description is not None:
+        if not isinstance(description, str):
+            return err("description must be a string", 400)
         description = description.strip()
         enc = env.ENCRYPTION_KEY
         updates.append("description=(?)")
         params.append(encrypt(description, enc) if description else "")
 
     if atype is not None:
+        if not isinstance(atype, str):
+            return err("type must be a string", 400)
         atype = atype.strip()
         if atype not in ("course", "meetup", "workshop", "seminar", "other"):
             atype = "course"
@@ -1107,6 +1113,8 @@ async def api_update_activity(act_id, req, env):
         params.append(atype)
 
     if fmt is not None:
+        if not isinstance(fmt, str):
+            return err("format must be a string", 400)
         fmt = fmt.strip()
         if fmt not in ("live", "self_paced", "hybrid"):
             fmt = "self_paced"
@@ -1114,6 +1122,8 @@ async def api_update_activity(act_id, req, env):
         params.append(fmt)
 
     if schedule_type is not None:
+        if not isinstance(schedule_type, str):
+            return err("schedule_type must be a string", 400)
         schedule_type = schedule_type.strip()
         if schedule_type not in ("one_time", "multi_session", "recurring", "ongoing"):
             schedule_type = "ongoing"
@@ -1139,6 +1149,8 @@ async def api_update_activity(act_id, req, env):
             capture_exception(e, req, env, "api_update_activity.delete_activity_tags")
 
         for tag_name in tags:
+            if not isinstance(tag_name, str):
+                continue
             tag_name_clean = tag_name.strip()
             if not tag_name_clean:
                 continue
@@ -1186,6 +1198,8 @@ async def api_update_session(ses_id, req, env):
     params = []
 
     if title is not None:
+        if not isinstance(title, str):
+            return err("title must be a string", 400)
         title = title.strip()
         if not title:
             return err("title cannot be empty")
@@ -1193,22 +1207,30 @@ async def api_update_session(ses_id, req, env):
         params.append(title)
 
     if description is not None:
+        if not isinstance(description, str):
+            return err("description must be a string", 400)
         description = description.strip()
         enc = env.ENCRYPTION_KEY
         updates.append("description=(?)")
         params.append(encrypt(description, enc) if description else "")
 
     if start_time is not None:
+        if not isinstance(start_time, str):
+            return err("start_time must be a string", 400)
         start_time = start_time.strip()
         updates.append("start_time=(?)")
         params.append(start_time)
 
     if end_time is not None:
+        if not isinstance(end_time, str):
+            return err("end_time must be a string", 400)
         end_time = end_time.strip()
         updates.append("end_time=(?)")
         params.append(end_time)
 
     if location is not None:
+        if not isinstance(location, str):
+            return err("location must be a string", 400)
         location = location.strip()
         enc = env.ENCRYPTION_KEY
         updates.append("location=(?)")
@@ -1226,7 +1248,6 @@ async def api_update_session(ses_id, req, env):
         return ok(None, "No changes provided")
 
     return ok(None, "Session updated")
-
 
 async def api_admin_table_counts(req, env):
     if not _is_basic_auth_valid(req, env):

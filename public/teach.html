@@ -127,13 +127,13 @@
             </div>
             
             <div id="existing-sessions" class="hidden my-2">
-              <label class="block text-sm font-medium text-slate-700 mb-1">Existing Sessions</label>
+              <h3 class="block text-sm font-medium text-slate-700 mb-1">Existing Sessions</h3>
               <ul id="s-session-list" class="divide-y divide-slate-100 text-sm border border-slate-200 rounded-lg max-h-40 overflow-y-auto"></ul>
             </div>
             
             <div class="mt-4 border-t pt-4 border-slate-100" id="ses-fields">
               <div>
-                <label id="ses-fields-title" class="block text-sm font-semibold text-slate-800 mb-2">New Session Details</label>
+                <h3 id="ses-fields-title" class="block text-sm font-semibold text-slate-800 mb-2">New Session Details</h3>
               </div>
               <div>
                 <label for="s-title" class="block text-sm font-medium text-slate-700 mb-1">Session Title *</label>
@@ -273,14 +273,18 @@
   let editActivityId = null;
   let editSessionId = null;
   let currentActivitySessions = [];
+  let activityEditLoadSeq = 0;
+  let sessionListLoadSeq = 0;
 
   async function startEditActivity(id) {
+    const loadSeq = ++activityEditLoadSeq;
     const a = hostedActivities.find(act => act.id === id);
     if (!a) return;
     
     // fetch details and get description
     const res = await fetch('/api/activities/' + id, { headers: { Authorization: 'Bearer ' + token } });
     const data = await res.json();
+    if (loadSeq !== activityEditLoadSeq) return;
     if (!res.ok) { showMsg('act-err', 'Failed to load activity details', true); return; }
     
     const fullAct = data.activity;
@@ -346,6 +350,7 @@
 
   async function onActivitySelect() {
     const actId = document.getElementById('s-activity').value;
+    const loadSeq = ++sessionListLoadSeq;
     const listDiv = document.getElementById('existing-sessions');
     const ul = document.getElementById('s-session-list');
     cancelEditSession();
@@ -362,6 +367,7 @@
       return;
     }
     const data = await res.json();
+    if (loadSeq !== sessionListLoadSeq || document.getElementById('s-activity').value !== actId) return;
     currentActivitySessions = data.sessions || [];
     
     if (currentActivitySessions.length === 0) {
