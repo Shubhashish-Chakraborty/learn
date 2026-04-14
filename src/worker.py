@@ -112,8 +112,9 @@ def _derive_aes_key_bytes(secret: str) -> bytes:
 async def _import_aes_key(key_bytes: bytes) -> object:
     """Import raw bytes as a Web Crypto AES-GCM CryptoKey."""
     key_buf = to_js(key_bytes, create_pyproxies=False)
-    algo    = {"name": "AES-GCM"}
-    usages  = to_js(["encrypt", "decrypt"])
+    algo = js.Object.new()
+    algo.name = "AES-GCM"
+    usages = to_js(["encrypt", "decrypt"])
     return await js.crypto.subtle.importKey("raw", key_buf, algo, False, usages)
 
 
@@ -121,6 +122,7 @@ async def encrypt_aes(plaintext: str, secret: str) -> str:
     """
     AES-256-GCM encryption using js.crypto.subtle (Web Crypto API).
     Returns "v1:" + base64(iv || ciphertext+tag).
+    Key is derived via PBKDF2-SHA256 (100k iterations) on every call.
     Raises RuntimeError on encryption failure — no silent XOR fallback.
     """
     if not plaintext:
@@ -129,16 +131,18 @@ async def encrypt_aes(plaintext: str, secret: str) -> str:
         key_bytes  = _derive_aes_key_bytes(secret)
         crypto_key = await _import_aes_key(key_bytes)
 
-        # Generate random IV directly into a JS Uint8Array for clean interop
-        iv_array   = js.Uint8Array.new(12)
+        iv_array = js.Uint8Array.new(12)
         js.crypto.getRandomValues(iv_array)
-        iv         = bytes(iv_array) # Extract back to python bytes for storage
+        iv = bytes(iv_array)
 
-        # Pass algo as a plain dict; Web Crypto accepts both JS objects and plain dicts
-        algo       = {"name": "AES-GCM", "iv": iv_array}
-        data       = to_js(plaintext.encode("utf-8"), create_pyproxies=False)
-        ct_buf     = await js.crypto.subtle.encrypt(algo, crypto_key, data)
-        ct         = bytes(js.Uint8Array.new(ct_buf))
+        # Build JS object so Web Crypto can read .name and .iv
+        algo = js.Object.new()
+        algo.name = "AES-GCM"
+        algo.iv = iv_array
+
+        data   = to_js(plaintext.encode("utf-8"), create_pyproxies=False)
+        ct_buf = await js.crypto.subtle.encrypt(algo, crypto_key, data)
+        ct     = bytes(js.Uint8Array.new(ct_buf))
         return "v1:" + base64.b64encode(iv + ct).decode("ascii")
     except Exception as exc:
         capture_exception(exc, where="encrypt_aes")
@@ -154,21 +158,26 @@ async def decrypt_aes(ciphertext: str, secret: str) -> str:
     if not ciphertext.startswith("v1:"):
         return _decrypt_xor(ciphertext, secret)
     try:
-        raw        = base64.b64decode(ciphertext[3:])
-        iv, ct     = raw[:12], raw[12:]
+        raw    = base64.b64decode(ciphertext[3:])
+        iv, ct = raw[:12], raw[12:]
     except Exception as exc:
         capture_exception(exc, where="decrypt_aes.decode")
         return "[decryption error]"
     try:
         key_bytes  = _derive_aes_key_bytes(secret)
         crypto_key = await _import_aes_key(key_bytes)
-        iv_array   = to_js(iv, create_pyproxies=False)
-        algo       = {"name": "AES-GCM", "iv": iv_array}
-        data       = to_js(ct, create_pyproxies=False)
-        pt_buf     = await js.crypto.subtle.decrypt(algo, crypto_key, data)
+
+        iv_array = to_js(iv, create_pyproxies=False)
+
+        # Build JS object so Web Crypto can read .name and .iv
+        algo = js.Object.new()
+        algo.name = "AES-GCM"
+        algo.iv = iv_array
+
+        data   = to_js(ct, create_pyproxies=False)
+        pt_buf = await js.crypto.subtle.decrypt(algo, crypto_key, data)
         return bytes(js.Uint8Array.new(pt_buf)).decode("utf-8")
     except Exception as exc:
-        # Auth tag mismatch = tampered/corrupted ciphertext
         capture_exception(exc, where="decrypt_aes.auth")
         return "[decryption error]"
 
@@ -1224,6 +1233,27 @@ async def serve_static(path: str, env):
     mime = _MIME.get(ext, "text/plain")
     return Response(content, headers={"Content-Type": mime, **_CORS})
 
+async def api_get_users(req, env):
+    try:
+        res = await env.DB.prepare(
+            "SELECT username FROM users"
+        ).all()
+
+        userData = []
+
+        for row in (res.results or []):
+            decrypted_username = await decrypt_aes(row.username, env.ENCRYPTION_KEY)
+
+            userData.append({
+                "username": decrypted_username
+            })
+
+        return ok({
+            "users": userData
+        })
+
+    except Exception as e:
+        return err(f"something went wrong: {e}", 500)
 
 # ---------------------------------------------------------------------------
 # Main dispatcher
@@ -1265,6 +1295,9 @@ async def _dispatch(request, env):
 
         if path == "/api/login" and method == "POST":
             return await api_login(request, env)
+        
+        if path == "/api/users" and method == "GET":
+            return await api_get_users(request, env)
 
         if path == "/api/activities" and method == "GET":
             return await api_list_activities(request, env)
