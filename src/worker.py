@@ -1233,27 +1233,6 @@ async def serve_static(path: str, env):
     mime = _MIME.get(ext, "text/plain")
     return Response(content, headers={"Content-Type": mime, **_CORS})
 
-async def api_get_users(req, env):
-    try:
-        res = await env.DB.prepare(
-            "SELECT username FROM users"
-        ).all()
-
-        userData = []
-
-        for row in (res.results or []):
-            decrypted_username = await decrypt_aes(row.username, env.ENCRYPTION_KEY)
-
-            userData.append({
-                "username": decrypted_username
-            })
-
-        return ok({
-            "users": userData
-        })
-
-    except Exception as e:
-        return err(f"something went wrong: {e}", 500)
 
 # ---------------------------------------------------------------------------
 # Main dispatcher
@@ -1295,9 +1274,6 @@ async def _dispatch(request, env):
 
         if path == "/api/login" and method == "POST":
             return await api_login(request, env)
-        
-        if path == "/api/users" and method == "GET":
-            return await api_get_users(request, env)
 
         if path == "/api/activities" and method == "GET":
             return await api_list_activities(request, env)
