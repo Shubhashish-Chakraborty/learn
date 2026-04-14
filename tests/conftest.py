@@ -112,9 +112,26 @@ class _Crypto:
         return b"\x00" * 12
 
 
+class _JsObject:
+    """Stub for a plain JS object created via ``js.Object.new()``.
+
+    Supports arbitrary attribute assignment, mirroring a vanilla JS object.
+    """
+    pass
+
+
+class _JsObjectClass:
+    """Stub for ``js.Object`` — only ``new()`` is needed by worker.py."""
+
+    @staticmethod
+    def new():
+        return _JsObject()
+
+
 class _JsModule:
     crypto = _Crypto()
     Uint8Array = _Uint8Array()
+    Object = _JsObjectClass()
 
 
 sys.modules["js"] = _JsModule()
